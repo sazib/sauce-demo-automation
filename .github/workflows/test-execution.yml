@@ -5,16 +5,73 @@ on:
     branches: [ main, develop ]
   pull_request:
     branches: [ main, develop ]
+
+  # Manual trigger — exposes the same parameters as run-tests.sh
   workflow_dispatch:
+    inputs:
+      browser:
+        description: 'Browser to use'
+        required: true
+        default: 'Chrome'
+        type: choice
+        options:
+          - Chrome
+          - Firefox
+          - Edge
+
+      headless:
+        description: 'Run in headless mode (no visible browser window)'
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+      environment:
+        description: 'Test environment (controls which appsettings.{env}.json is loaded)'
+        required: true
+        default: 'CI'
+        type: choice
+        options:
+          - CI
+          - Development
+
+      filter:
+        description: 'Test filter — leave blank to run all tests (e.g. Category=smoke, Category=happy-path, Category=negative, Category=navigation)'
+        required: false
+        default: ''
+        type: string
+
+      verbosity:
+        description: 'dotnet test output verbosity'
+        required: true
+        default: 'normal'
+        type: choice
+        options:
+          - quiet
+          - minimal
+          - normal
+          - detailed
+
+      parallel:
+        description: 'Run tests in parallel (4 workers)'
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 jobs:
   test:
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        browser: [Chrome]
-      fail-fast: false
+    # Required by dorny/test-reporter to create check runs and write annotations
+    permissions:
+      contents: read
+      checks: write
+      actions: read
 
     steps:
     - name: Checkout code
@@ -26,12 +83,35 @@ jobs:
         dotnet-version: '8.0.x'
 
     # Installs a pinned Chrome + matching ChromeDriver and puts both on PATH.
-    # Selenium Manager (bundled with Selenium.WebDriver) will find chromedriver
-    # on PATH automatically — no WebDriverManager or manual download needed.
+    # Selenium Manager (bundled with Selenium.WebDriver) picks up chromedriver
+    # from PATH automatically — no WebDriverManager or manual download needed.
     - name: Setup Chrome
       uses: browser-actions/setup-chrome@v1
       with:
         chrome-version: stable
+
+    # Resolve inputs: manual runs use workflow_dispatch inputs,
+    # automated runs (push/PR) fall back to sensible CI defaults.
+    - name: Resolve run parameters
+      id: params
+      run: |
+        echo "browser=${{ github.event.inputs.browser || 'Chrome' }}"         >> $GITHUB_OUTPUT
+        echo "headless=${{ github.event.inputs.headless || 'true' }}"         >> $GITHUB_OUTPUT
+        echo "environment=${{ github.event.inputs.environment || 'CI' }}"     >> $GITHUB_OUTPUT
+        echo "filter=${{ github.event.inputs.filter || '' }}"                 >> $GITHUB_OUTPUT
+        echo "verbosity=${{ github.event.inputs.verbosity || 'normal' }}"     >> $GITHUB_OUTPUT
+        echo "parallel=${{ github.event.inputs.parallel || 'false' }}"        >> $GITHUB_OUTPUT
+
+    - name: Print run configuration
+      run: |
+        echo "========================================"
+        echo "  Browser     : ${{ steps.params.outputs.browser }}"
+        echo "  Headless    : ${{ steps.params.outputs.headless }}"
+        echo "  Environment : ${{ steps.params.outputs.environment }}"
+        echo "  Filter      : ${{ steps.params.outputs.filter || 'none (all tests)' }}"
+        echo "  Verbosity   : ${{ steps.params.outputs.verbosity }}"
+        echo "  Parallel    : ${{ steps.params.outputs.parallel }}"
+        echo "========================================"
 
     - name: Restore dependencies
       run: dotnet restore SauceDemo.AutomationFramework.sln
@@ -41,16 +121,33 @@ jobs:
 
     - name: Run tests
       env:
-        TEST_ENVIRONMENT: CI
-        BROWSER: ${{ matrix.browser }}
-        HEADLESS: "true"
-      run: dotnet test SauceDemo.AutomationFramework.sln --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=test-results.trx"
+        TEST_ENVIRONMENT: ${{ steps.params.outputs.environment }}
+        BROWSER:          ${{ steps.params.outputs.browser }}
+        HEADLESS:         ${{ steps.params.outputs.headless }}
+      run: |
+        # Build the dotnet test command the same way run-tests.sh does
+        CMD="dotnet test SauceDemo.AutomationFramework.sln \
+          --configuration Release \
+          --no-build \
+          --verbosity ${{ steps.params.outputs.verbosity }} \
+          --logger trx;LogFileName=test-results.trx"
+
+        if [ -n "${{ steps.params.outputs.filter }}" ]; then
+          CMD="$CMD --filter \"${{ steps.params.outputs.filter }}\""
+        fi
+
+        if [ "${{ steps.params.outputs.parallel }}" = "true" ]; then
+          CMD="$CMD -- NUnit.NumberOfTestWorkers=4"
+        fi
+
+        echo "Running: $CMD"
+        eval $CMD
 
     - name: Upload test results
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: test-results-${{ matrix.browser }}
+        name: test-results-${{ steps.params.outputs.browser }}
         path: |
           **/TestResults/*.trx
           **/logs/*.log
@@ -60,7 +157,7 @@ jobs:
       if: always()
       uses: dorny/test-reporter@v1
       with:
-        name: Test Results - ${{ matrix.browser }}
+        name: Test Results - ${{ steps.params.outputs.browser }}
         path: '**/TestResults/*.trx'
         reporter: dotnet-trx
         fail-on-error: false
