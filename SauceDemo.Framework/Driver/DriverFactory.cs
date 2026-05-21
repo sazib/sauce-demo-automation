@@ -26,18 +26,18 @@ public class DriverFactory
         return driver;
     }
 
-    private static IWebDriver CreateChromeDriver(bool headless)
+    private static IWebDriver CreateChromeDriver(bool headless, string version = "148")
     {
         // Use fully qualified name to avoid conflict with our DriverManager class
-        new WebDriverManager.DriverManager().SetUpDriver(new ChromeConfig());
-        
+        new WebDriverManager.DriverManager().SetUpDriver(new ChromeConfig(), version);
+
         var options = new ChromeOptions();
-        
+
         if (headless)
         {
             options.AddArgument("--headless=new");
         }
-        
+
         options.AddArgument("--no-sandbox");
         options.AddArgument("--disable-dev-shm-usage");
         options.AddArgument("--disable-gpu");
@@ -55,14 +55,14 @@ public class DriverFactory
     {
         // Use fully qualified name to avoid conflict with our DriverManager class
         new WebDriverManager.DriverManager().SetUpDriver(new FirefoxConfig());
-        
+
         var options = new FirefoxOptions();
-        
+
         if (headless)
         {
             options.AddArgument("--headless");
         }
-        
+
         options.AddArgument("--width=1920");
         options.AddArgument("--height=1080");
 
@@ -73,14 +73,14 @@ public class DriverFactory
     {
         // Use fully qualified name to avoid conflict with our DriverManager class
         new WebDriverManager.DriverManager().SetUpDriver(new EdgeConfig());
-        
+
         var options = new EdgeOptions();
-        
+
         if (headless)
         {
             options.AddArgument("--headless=new");
         }
-        
+
         options.AddArgument("--no-sandbox");
         options.AddArgument("--disable-dev-shm-usage");
         options.AddArgument("--window-size=1920,1080");
