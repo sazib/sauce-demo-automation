@@ -10,7 +10,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     strategy:
       matrix:
         browser: [Chrome]
@@ -25,6 +25,14 @@ jobs:
       with:
         dotnet-version: '8.0.x'
 
+    # Installs a pinned Chrome + matching ChromeDriver and puts both on PATH.
+    # Selenium Manager (bundled with Selenium.WebDriver) will find chromedriver
+    # on PATH automatically — no WebDriverManager or manual download needed.
+    - name: Setup Chrome
+      uses: browser-actions/setup-chrome@v1
+      with:
+        chrome-version: stable
+
     - name: Restore dependencies
       run: dotnet restore SauceDemo.AutomationFramework.sln
 
@@ -35,7 +43,7 @@ jobs:
       env:
         TEST_ENVIRONMENT: CI
         BROWSER: ${{ matrix.browser }}
-        HEADLESS: true
+        HEADLESS: "true"
       run: dotnet test SauceDemo.AutomationFramework.sln --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=test-results.trx"
 
     - name: Upload test results
