@@ -2,11 +2,10 @@ name: Automated Test Execution
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, feature/* ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, feature/* ]
 
-  # Manual trigger — exposes the same parameters as run-tests.sh
   workflow_dispatch:
     inputs:
       browser:
@@ -18,15 +17,6 @@ on:
           - Chrome
           - Firefox
           - Edge
-
-      headless:
-        description: 'Run in headless mode (no visible browser window)'
-        required: true
-        default: 'true'
-        type: choice
-        options:
-          - 'true'
-          - 'false'
 
       environment:
         description: 'Test environment (controls which appsettings.{env}.json is loaded)'
@@ -82,16 +72,12 @@ jobs:
       with:
         dotnet-version: '8.0.x'
 
-    # Installs a pinned Chrome + matching ChromeDriver and puts both on PATH.
-    # Selenium Manager (bundled with Selenium.WebDriver) picks up chromedriver
-    # from PATH automatically — no WebDriverManager or manual download needed.
     - name: Setup Chrome
       uses: browser-actions/setup-chrome@v1
       with:
         chrome-version: stable
 
-    # Resolve inputs: manual runs use workflow_dispatch inputs,
-    # automated runs (push/PR) fall back to sensible CI defaults.
+    
     - name: Resolve run parameters
       id: params
       run: |
